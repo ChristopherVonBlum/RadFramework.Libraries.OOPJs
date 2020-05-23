@@ -30,138 +30,20 @@ StructuredObject.prototype.setMemberType = function(memberName, memberType)
     memberTypes[memberName] = memberType; 
 };
 
+StructuredObject.prototype.isCustomMember = function(memberName)
+{
+    return this.getMemberType(memberName) !== "§§";
+}
+
 StructuredObject.prototype.setMemberType("§§memberTypes", "§§");
-StructuredObject.prototype.setMemberType("§§memberAnnotations", "§§");
-StructuredObject.prototype.setMemberType("§§annotations", "§§");
 StructuredObject.prototype.setMemberType("getMemberType", "§§");
 StructuredObject.prototype.setMemberType("setMemberType", "§§");
-StructuredObject.prototype.setMemberType("getMembersByType", "§§");
-StructuredObject.prototype.setMemberType("annotate", "§§");
-StructuredObject.prototype.setMemberType("annotateMember", "§§");
 StructuredObject.prototype.setMemberType("isCustomMember", "§§");
 StructuredObject.prototype.setMemberType("$inherits", "§§");
 StructuredObject.prototype.setMemberType("$protoCtor", "§§");
 StructuredObject.prototype.setMemberType("$ctor", "§§");
 StructuredObject.prototype.setMemberType("isFunctionPrimitive", "§§");
 StructuredObject.prototype.setMemberType("constructor", "§§");
-
-StructuredObject.prototype.getMembersByType = function(memberType)
-{
-    let members = [];
-
-    for(let memberName in this)
-    {
-        if(this.getMemberType(memberName) === memberType)
-        {
-            members.push(memberName);
-        }
-    }
-
-    return members;
-}
-
-StructuredObject.prototype.annotate = function(annotation)
-{
-    let annotations = this["§§annotations"];
-
-    if(annotations  === undefined)
-    {
-        annotations = this["§§annotations"] = new Array();
-    }
-
-    annotations.push(annotation);
-}
-
-StructuredObject.prototype.annotateMember = function(memberName, annotation)
-{
-    let annotations = this["§§memberAnnotations"];
-
-    if(annotations  === undefined)
-    {
-        annotations = this["§§memberAnnotations"] = new Array();
-    }        
-    
-    if(annotations[memberName] === undefined)
-    {
-        annotations[memberName] = [];
-    }
-
-    annotations[memberName].push(annotation);
-}
-
-StructuredObject.prototype.isCustomMember = function(memberName)
-{
-    return this.getMemberType(memberName) !== "§§";
-}
-
-function injectVar(func, vars, args){
-    var injectionWrapper = "(function(){\n"
-
-    var entire = func.toString(); 
-    var body = entire.slice(entire.indexOf("{") + 1, entire.lastIndexOf("}"));
-
-    injectionWrapper += "return (function __func(vars, arguments){\n"; 
-    
-    var i = 0;
-    
-    vars = Object.assign(new StructuredObject(), vars);
-    
-    for(v in vars)
-    {
-        if(!vars.isCustomMember(v))
-        {
-            continue;
-        }
-
-        injectionWrapper += "var " + v + " = vars[\"" + v + "\"];\n";
-        i++;
-    }
-    
-    for(i = 0; i < args.length; i++)
-    {
-        injectionWrapper += "var " + args[i] + " = arguments[\"" + i + "\"];\n";
-    }
-    
-    injectionWrapper += body + "\n})(vars, arguments)})";
-
-    return eval(injectionWrapper);
-}
-function injectThis(classModel, $this, args)
-{
-    let transformedProto = new StructuredObject;
-    for(let prop in classModel)
-    {
-        if(!classModel.isCustomMember(prop)){
-            continue;
-        }
-
-        let member = classModel[prop];
-
-        if(StructuredObject.prototype.isFunctionPrimitive.call(member))
-        {
-            var vars = { $this: $this };
-            var args = [];
-            var names = getParamNames(member);
-            for(i = 0; i < names.length; i++){
-                args[i] = names[i];
-            }
-
-            transformedProto[prop] = injectVar(member, vars, args);
-            continue;
-        }
-    }
-
-    return transformedProto;
-}
-var STRIP_COMMENTS = /((\/\/.*$)|(\/\*[\s\S]*?\*\/))/mg;
-var ARGUMENT_NAMES = /([^\s,]+)/g;
-function getParamNames(func) {
-    var fnStr = func.toString().replace(STRIP_COMMENTS, '');
-    var result = fnStr.slice(fnStr.indexOf('(')+1, fnStr.indexOf(')')).match(ARGUMENT_NAMES);
-    if(result === null)
-        result = [];
-    return result;
-}
 
 function makeClass(classModel)
 {
@@ -221,7 +103,79 @@ function makeClass(classModel)
 })()");
 
     ctor.prototype = ownProto;
+
     ctor.prototype.constructor = ctor;
 
     return ctor;
+}
+
+function injectThis(classModel, $this, args)
+{
+    let transformedProto = new StructuredObject;
+    for(let prop in classModel)
+    {
+        if(!classModel.isCustomMember(prop)){
+            continue;
+        }
+
+        let member = classModel[prop];
+
+        if(StructuredObject.prototype.isFunctionPrimitive.call(member))
+        {
+            var vars = { $this: $this };
+            var args = [];
+            var names = getParamNames(member);
+            for(i = 0; i < names.length; i++){
+                args[i] = names[i];
+            }
+
+            transformedProto[prop] = injectVar(member, vars, args);
+            continue;
+        }
+    }
+
+    return transformedProto;
+}
+
+function injectVar(func, vars, args){
+    var injectionWrapper = "(function(){\n"
+
+    var entire = func.toString(); 
+    var body = entire.slice(entire.indexOf("{") + 1, entire.lastIndexOf("}"));
+
+    injectionWrapper += "return (function __func(vars, arguments){\n"; 
+    
+    var i = 0;
+    
+    vars = Object.assign(new StructuredObject(), vars);
+    
+    for(v in vars)
+    {
+        if(!vars.isCustomMember(v))
+        {
+            continue;
+        }
+
+        injectionWrapper += "var " + v + " = vars[\"" + v + "\"];\n";
+        i++;
+    }
+    
+    for(i = 0; i < args.length; i++)
+    {
+        injectionWrapper += "var " + args[i] + " = arguments[\"" + i + "\"];\n";
+    }
+    
+    injectionWrapper += body + "\n})(vars, arguments)})";
+
+    return eval(injectionWrapper);
+}
+
+var STRIP_COMMENTS = /((\/\/.*$)|(\/\*[\s\S]*?\*\/))/mg;
+var ARGUMENT_NAMES = /([^\s,]+)/g;
+function getParamNames(func) {
+    var fnStr = func.toString().replace(STRIP_COMMENTS, '');
+    var result = fnStr.slice(fnStr.indexOf('(')+1, fnStr.indexOf(')')).match(ARGUMENT_NAMES);
+    if(result === null)
+        result = [];
+    return result;
 }
